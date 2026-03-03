@@ -1,221 +1,257 @@
 /*
- * Stripe-style vertical ribbon wave
- * Multi-layer opaque silk bands with sheen
- * Three.js r178
+ * Stripe-style 3D ribbon
+ * Multiple flat ribbon bands swept along curve paths
+ * Uses Three.js TubeGeometry + scene lighting
  */
 
 (function () {
   var container = document.getElementById('ribbon-container');
-  var scene, camera, renderer;
+  var renderer, scene, camera;
   var ribbons = [];
   var startTime = Date.now();
 
-  /*
-   * Layer config — back to front
-   * baseColor / highlightColor: RGB 0–1
-   * xShift, yShift: lateral and vertical offset in world units
-   * zDepth: depth position (negative = further back)
-   * twist: how much the ribbon twists per unit height
-   * phaseOffset: animation phase difference
-   * widthScale, heightScale: geometry dimensions
-   */
-  var layers = [
-    // 0: pale blue-white (far left edge, back)
+  // --- ribbon definitions ---
+  // Each ribbon: color, a set of base control points, width (tube radius), phase
+  var RIBBON_DEFS = [
     {
-      baseColor: [0.72, 0.78, 0.96],
-      highlightColor: [0.92, 0.95, 1.0],
-      xShift: -0.35, yShift: 0.08, zDepth: -0.55,
-      twist: 0.15, phaseOffset: 0.0,
-      widthScale: 0.44, heightScale: 2.9
+      // pale blue-white (leftmost/back)
+      color: 0xb8c4ff,
+      emissive: 0x1a1a3a,
+      points: [
+        [0.9, 2.8, -0.8], [0.4, 1.8, -0.3], [-0.2, 0.9, -0.6],
+        [-0.6, 0.0, 0.2], [-0.2, -0.9, -0.4], [-0.7, -1.8, 0.1], [-1.0, -2.6, -0.3]
+      ],
+      radius: 0.18,
+      flatScale: 3.5,
+      phase: 0.0
     },
-    // 1: soft purple/violet
     {
-      baseColor: [0.58, 0.38, 0.88],
-      highlightColor: [0.80, 0.68, 1.0],
-      xShift: -0.20, yShift: 0.04, zDepth: -0.42,
-      twist: 0.18, phaseOffset: 0.4,
-      widthScale: 0.50, heightScale: 2.9
+      // lavender-purple
+      color: 0x9474e8,
+      emissive: 0x1a0a3a,
+      points: [
+        [1.0, 2.6, -0.4], [0.5, 1.7, 0.2], [0.0, 0.8, -0.3],
+        [-0.4, -0.1, 0.5], [0.1, -1.0, -0.2], [-0.5, -1.9, 0.3], [-0.8, -2.7, -0.1]
+      ],
+      radius: 0.20,
+      flatScale: 3.8,
+      phase: 0.5
     },
-    // 2: magenta-pink (largest band)
     {
-      baseColor: [0.96, 0.26, 0.62],
-      highlightColor: [1.0, 0.62, 0.82],
-      xShift: -0.05, yShift: 0.0, zDepth: -0.28,
-      twist: 0.22, phaseOffset: 0.8,
-      widthScale: 0.58, heightScale: 2.9
+      // magenta
+      color: 0xe838c8,
+      emissive: 0x3a0a2a,
+      points: [
+        [1.1, 2.5, 0.0], [0.6, 1.6, 0.5], [0.1, 0.7, 0.0],
+        [-0.3, -0.2, 0.6], [0.2, -1.1, 0.1], [-0.3, -2.0, 0.5], [-0.6, -2.8, 0.1]
+      ],
+      radius: 0.22,
+      flatScale: 4.0,
+      phase: 1.0
     },
-    // 3: hot pink
     {
-      baseColor: [1.0, 0.36, 0.70],
-      highlightColor: [1.0, 0.70, 0.86],
-      xShift: 0.07, yShift: -0.02, zDepth: -0.14,
-      twist: 0.20, phaseOffset: 1.2,
-      widthScale: 0.52, heightScale: 2.9
+      // hot pink
+      color: 0xff4da0,
+      emissive: 0x3a0a1a,
+      points: [
+        [1.2, 2.4, 0.3], [0.7, 1.5, 0.7], [0.2, 0.6, 0.2],
+        [-0.2, -0.3, 0.8], [0.3, -1.2, 0.3], [-0.1, -2.1, 0.7], [-0.4, -2.9, 0.3]
+      ],
+      radius: 0.20,
+      flatScale: 3.6,
+      phase: 1.5
     },
-    // 4: bright orange/amber (center band)
     {
-      baseColor: [1.0, 0.52, 0.06],
-      highlightColor: [1.0, 0.80, 0.42],
-      xShift: 0.12, yShift: -0.03, zDepth: 0.0,
-      twist: 0.25, phaseOffset: 1.6,
-      widthScale: 0.46, heightScale: 2.9
+      // coral/orange
+      color: 0xff7a30,
+      emissive: 0x3a1a0a,
+      points: [
+        [1.3, 2.3, 0.5], [0.8, 1.4, 0.3], [0.3, 0.5, 0.7],
+        [0.0, -0.4, 0.3], [0.4, -1.3, 0.8], [0.1, -2.2, 0.4], [-0.2, -3.0, 0.6]
+      ],
+      radius: 0.19,
+      flatScale: 3.5,
+      phase: 2.0
     },
-    // 5: warm peach-orange (front-right)
     {
-      baseColor: [1.0, 0.66, 0.30],
-      highlightColor: [1.0, 0.86, 0.62],
-      xShift: 0.22, yShift: -0.05, zDepth: 0.14,
-      twist: 0.20, phaseOffset: 2.0,
-      widthScale: 0.42, heightScale: 2.9
+      // warm amber/yellow-orange (rightmost/front)
+      color: 0xffa020,
+      emissive: 0x3a2a0a,
+      points: [
+        [1.4, 2.2, 0.7], [0.9, 1.3, 0.1], [0.4, 0.4, 0.9],
+        [0.1, -0.5, 0.1], [0.5, -1.4, 0.6], [0.3, -2.3, 0.2], [0.0, -3.1, 0.8]
+      ],
+      radius: 0.17,
+      flatScale: 3.2,
+      phase: 2.5
     }
   ];
 
-  // --- vertex shader ---
-  var vertSrc = [
-    'uniform float time;',
-    'uniform float twist;',
-    'uniform float phaseOffset;',
-    'uniform vec2 shift;',
-    '',
-    'varying vec3 vWorldNormal;',
-    'varying vec3 vWorldPos;',
-    'varying vec2 vUv;',
-    '',
-    'float hash(float n) {',
-    '  return fract(sin(n) * 43758.5453);',
-    '}',
-    '',
-    'float noise3d(vec3 x) {',
-    '  vec3 p = floor(x);',
-    '  vec3 f = fract(x);',
-    '  f = f * f * (3.0 - 2.0 * f);',
-    '  float n = p.x + p.y * 57.0 + 113.0 * p.z;',
-    '  return mix(',
-    '    mix(mix(hash(n), hash(n+1.0), f.x), mix(hash(n+57.0), hash(n+58.0), f.x), f.y),',
-    '    mix(mix(hash(n+113.0), hash(n+114.0), f.x), mix(hash(n+170.0), hash(n+171.0), f.x), f.y),',
-    '    f.z',
-    '  );',
-    '}',
-    '',
-    'void main() {',
-    '  vUv = uv;',
-    '  float t = time + phaseOffset;',
-    '  float y = position.y;',
-    '  float x = position.x;',
-    '',
-    '  // S-curve sway',
-    '  float sway = sin(y * 1.8 + t * 0.3) * 0.28;',
-    '  sway += sin(y * 3.2 + t * 0.2 + 1.5) * 0.12;',
-    '',
-    '  // twist around vertical axis',
-    '  float angle = y * twist + t * 0.12;',
-    '  float c = cos(angle);',
-    '  float s = sin(angle);',
-    '',
-    '  float nx = x * c + sway;',
-    '  float nz = x * s;',
-    '',
-    '  // organic noise',
-    '  vec3 ni = vec3(x * 2.0, y * 1.5 + t * 0.08, t * 0.04);',
-    '  float nv = noise3d(ni);',
-    '  nx += nv * 0.05;',
-    '  nz += nv * 0.03;',
-    '',
-    '  nx += shift.x;',
-    '  float ny = y + shift.y;',
-    '',
-    '  vec3 deformed = vec3(nx, ny, nz);',
-    '  vWorldPos = (modelMatrix * vec4(deformed, 1.0)).xyz;',
-    '',
-    '  // approximate normal from cross product of tangent vectors',
-    '  float swayDy = cos(y * 1.8 + t * 0.3) * 0.28 * 1.8',
-    '               + cos(y * 3.2 + t * 0.2 + 1.5) * 0.12 * 3.2;',
-    '  vec3 tX = vec3(c, 0.0, s);',
-    '  vec3 tY = normalize(vec3(-x * s * twist + swayDy, 1.0, x * c * twist));',
-    '  vWorldNormal = normalize(cross(tY, tX));',
-    '',
-    '  gl_Position = projectionMatrix * modelViewMatrix * vec4(deformed, 1.0);',
-    '}'
-  ].join('\n');
-
-  // --- fragment shader: opaque silk with sheen ---
-  var fragSrc = [
-    'uniform vec3 baseColor;',
-    'uniform vec3 highlightColor;',
-    '',
-    'varying vec3 vWorldNormal;',
-    'varying vec3 vWorldPos;',
-    'varying vec2 vUv;',
-    '',
-    'void main() {',
-    '  vec3 N = normalize(vWorldNormal);',
-    '  vec3 V = normalize(cameraPosition - vWorldPos);',
-    '',
-    '  // fresnel-based silk sheen',
-    '  float fresnel = 1.0 - abs(dot(N, V));',
-    '  fresnel = pow(fresnel, 1.8);',
-    '',
-    '  // soft directional light',
-    '  vec3 L = normalize(vec3(0.5, 0.8, 1.0));',
-    '  float diff = max(dot(N, L), 0.0);',
-    '  diff = 0.55 + 0.45 * diff;',
-    '',
-    '  // specular for silk sheen',
-    '  vec3 H = normalize(L + V);',
-    '  float spec = pow(max(dot(N, H), 0.0), 40.0);',
-    '',
-    '  // color blend',
-    '  vec3 col = mix(baseColor, highlightColor, fresnel * 0.55 + vUv.y * 0.12);',
-    '  col *= diff;',
-    '  col += spec * 0.3;',
-    '',
-    '  // subtle silk fiber lines',
-    '  float fiber = sin(vUv.x * 350.0 + vUv.y * 40.0) * 0.012;',
-    '  col += fiber;',
-    '',
-    '  gl_FragColor = vec4(col, 1.0);',
-    '}'
-  ].join('\n');
+  function createCurve(basePts, time, phase) {
+    var t = time * 0.08 + phase;
+    var pts = [];
+    for (var i = 0; i < basePts.length; i++) {
+      var p = basePts[i];
+      // very gentle drift on each control point
+      var f = i / (basePts.length - 1);
+      pts.push(new THREE.Vector3(
+        p[0] + Math.sin(t * 0.7 + f * 2.0) * 0.08,
+        p[1] + Math.sin(t * 0.5 + f * 1.5 + 1.0) * 0.05,
+        p[2] + Math.sin(t * 0.6 + f * 2.5 + 0.5) * 0.07
+      ));
+    }
+    return new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.4);
+  }
 
   function init() {
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    camera.position.set(0, 0, 3.5);
-    camera.lookAt(0, 0, 0);
+
+    camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
+    camera.position.set(0.5, 0.2, 5.5);
+    camera.lookAt(0.1, -0.2, 0.0);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setClearColor(0x000000, 0);
-    renderer.sortObjects = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
 
-    for (var i = 0; i < layers.length; i++) {
-      var cfg = layers[i];
-      var geo = new THREE.PlaneGeometry(cfg.widthScale, cfg.heightScale, 60, 200);
-      var mat = new THREE.ShaderMaterial({
-        uniforms: {
-          time:           { value: 0.0 },
-          twist:          { value: cfg.twist },
-          phaseOffset:    { value: cfg.phaseOffset },
-          shift:          { value: new THREE.Vector2(cfg.xShift, cfg.yShift) },
-          baseColor:      { value: new THREE.Vector3(cfg.baseColor[0], cfg.baseColor[1], cfg.baseColor[2]) },
-          highlightColor: { value: new THREE.Vector3(cfg.highlightColor[0], cfg.highlightColor[1], cfg.highlightColor[2]) }
-        },
-        vertexShader: vertSrc,
-        fragmentShader: fragSrc,
-        side: THREE.DoubleSide,
-        transparent: false,
-        depthTest: true,
-        depthWrite: true
+    // --- lighting setup for silk look ---
+
+    // key light - warm, upper right
+    var keyLight = new THREE.DirectionalLight(0xfff0e0, 2.5);
+    keyLight.position.set(3, 4, 5);
+    scene.add(keyLight);
+
+    // fill light - cool, left side
+    var fillLight = new THREE.DirectionalLight(0xc0d0ff, 1.2);
+    fillLight.position.set(-3, -1, 3);
+    scene.add(fillLight);
+
+    // back/rim light
+    var rimLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    rimLight.position.set(0, 0, -4);
+    scene.add(rimLight);
+
+    // ambient
+    var ambLight = new THREE.AmbientLight(0x404060, 0.8);
+    scene.add(ambLight);
+
+    // --- create ribbon meshes ---
+    for (var i = 0; i < RIBBON_DEFS.length; i++) {
+      var def = RIBBON_DEFS[i];
+      var curve = createCurve(def.points, 0, def.phase);
+
+      var geo = new THREE.TubeGeometry(curve, 200, def.radius, 12, false);
+
+      var mat = new THREE.MeshStandardMaterial({
+        color: def.color,
+        emissive: def.emissive,
+        emissiveIntensity: 0.15,
+        roughness: 0.25,
+        metalness: 0.1,
+        side: THREE.DoubleSide
       });
+
       var mesh = new THREE.Mesh(geo, mat);
-      mesh.position.z = cfg.zDepth;
-      mesh.renderOrder = i;
+      // flatten the tube into a ribbon by scaling on one axis
+      mesh.scale.set(1, 1, 1);
+
       scene.add(mesh);
-      ribbons.push(mesh);
+      ribbons.push({ mesh: mesh, def: def, mat: mat });
     }
+
+    // now flatten each tube to look like a flat ribbon
+    // we do this by scaling the geometry cross-section
+    flattenTubes();
 
     handleResize();
     window.addEventListener('resize', handleResize);
+  }
+
+  function flattenTubes() {
+    // TubeGeometry creates round tubes. To make flat ribbons,
+    // we manipulate the geometry positions to flatten them along the
+    // local normal direction
+    for (var r = 0; r < ribbons.length; r++) {
+      var geo = ribbons[r].mesh.geometry;
+      var positions = geo.attributes.position;
+      var normals = geo.attributes.normal;
+      var def = ribbons[r].def;
+      var flatScale = def.flatScale;
+
+      // We'll use TubeGeometry's structure:
+      // it has (tubularSegments+1) rings of (radialSegments+1) vertices each
+      // For each ring, flatten the cross-section
+
+      var tubularSegs = 200;
+      var radialSegs = 12;
+
+      var curve = createCurve(def.points, 0, def.phase);
+      var frames = curve.computeFrenetFrames(tubularSegs, false);
+
+      for (var i = 0; i <= tubularSegs; i++) {
+        var N = frames.normals[i];
+        var B = frames.binormals[i];
+        var P = curve.getPointAt(i / tubularSegs);
+
+        for (var j = 0; j <= radialSegs; j++) {
+          var idx = i * (radialSegs + 1) + j;
+          var angle = (j / radialSegs) * Math.PI * 2;
+
+          // flat ribbon: stretch along binormal, compress along normal
+          var cx = Math.cos(angle) * def.radius * 0.3;  // thin
+          var cy = Math.sin(angle) * def.radius * flatScale;  // wide
+
+          var px = P.x + N.x * cx + B.x * cy;
+          var py = P.y + N.y * cx + B.y * cy;
+          var pz = P.z + N.z * cx + B.z * cy;
+
+          positions.setXYZ(idx, px, py, pz);
+        }
+      }
+
+      positions.needsUpdate = true;
+      geo.computeVertexNormals();
+    }
+  }
+
+  function updateGeometry(time) {
+    for (var r = 0; r < ribbons.length; r++) {
+      var ribbon = ribbons[r];
+      var def = ribbon.def;
+      var geo = ribbon.mesh.geometry;
+      var positions = geo.attributes.position;
+
+      var curve = createCurve(def.points, time, def.phase);
+      var frames = curve.computeFrenetFrames(200, false);
+
+      var tubularSegs = 200;
+      var radialSegs = 12;
+
+      for (var i = 0; i <= tubularSegs; i++) {
+        var N = frames.normals[i];
+        var B = frames.binormals[i];
+        var P = curve.getPointAt(i / tubularSegs);
+
+        for (var j = 0; j <= radialSegs; j++) {
+          var idx = i * (radialSegs + 1) + j;
+          var angle = (j / radialSegs) * Math.PI * 2;
+
+          var cx = Math.cos(angle) * def.radius * 0.3;
+          var cy = Math.sin(angle) * def.radius * def.flatScale;
+
+          positions.setXYZ(idx,
+            P.x + N.x * cx + B.x * cy,
+            P.y + N.y * cx + B.y * cy,
+            P.z + N.z * cx + B.z * cy
+          );
+        }
+      }
+
+      positions.needsUpdate = true;
+      geo.computeVertexNormals();
+    }
   }
 
   function handleResize() {
@@ -229,11 +265,10 @@
 
   function animate() {
     var elapsed = (Date.now() - startTime) * 0.001;
-    var t = elapsed * 0.35; // slow
 
-    for (var i = 0; i < ribbons.length; i++) {
-      ribbons[i].material.uniforms.time.value = t;
-    }
+    // update all ribbon curves slowly
+    updateGeometry(elapsed);
+
     renderer.render(scene, camera);
     requestAnimationFrame(animate);
   }
