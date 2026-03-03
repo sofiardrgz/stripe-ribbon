@@ -1,39 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ribbon</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stripe Ribbon</title>
   <style>
-    *, *::before, *::after {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      background: #ffffff;
-      overflow: hidden;
-    }
-
-    /* right-side ribbon — same position as stripe.com */
-    #container {
-      position: fixed;
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #fff; }
+    #ribbon-container {
+      position: absolute;
       top: 0;
       right: 0;
-      width: 62%;
+      width: 65%;
+      height: 100%;
+    }
+    #ribbon-container canvas {
+      display: block;
+      width: 100%;
       height: 100%;
     }
   </style>
 </head>
 <body>
-
-  <div id="container"></div>
-
+  <div id="ribbon-container"></div>
   <script src="./js/three.min.js"></script>
   <script src="./js/ribbon.js"></script>
-
 </body>
 </html>
