@@ -18,37 +18,29 @@
       overflow: hidden;
     }
 
-    .ribbon-wrapper {
+    .ribbon-wrap {
       position: fixed;
       top: 0;
       right: 0;
-      width: 60%;
+      width: 62%;
       height: 100%;
-      overflow: hidden;
     }
 
-    #gradient-canvas {
+    #wave-canvas {
       display: block;
       width: 100%;
       height: 100%;
-      --gradient-color-1: #f97316;
-      --gradient-color-2: #fb923c;
-      --gradient-color-3: #e879f9;
-      --gradient-color-4: #c026d3;
     }
   </style>
 </head>
 <body>
 
-  <div class="ribbon-wrapper">
-    <canvas id="gradient-canvas"></canvas>
+  <div class="ribbon-wrap">
+    <canvas id="wave-canvas"></canvas>
   </div>
 
-  <script src="./js/gradient.js"></script>
-  <script>
-    const gradient = new Gradient();
-    gradient.initGradient('#gradient-canvas');
-  </script>
+  <script src="./js/three.min.js"></script>
+  <script src="./js/wave.js"></script>
 
 </body>
 </html>
