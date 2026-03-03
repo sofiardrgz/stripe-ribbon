@@ -18,29 +18,22 @@
       overflow: hidden;
     }
 
-    .ribbon-wrap {
+    /* right-side ribbon — same position as stripe.com */
+    #container {
       position: fixed;
       top: 0;
       right: 0;
       width: 62%;
       height: 100%;
     }
-
-    #wave-canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
   </style>
 </head>
 <body>
 
-  <div class="ribbon-wrap">
-    <canvas id="wave-canvas"></canvas>
-  </div>
+  <div id="container"></div>
 
   <script src="./js/three.min.js"></script>
-  <script src="./js/wave.js"></script>
+  <script src="./js/ribbon.js"></script>
 
 </body>
 </html>
